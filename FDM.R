@@ -80,6 +80,7 @@ Tridiagnoal_System_Solver <- function(A, Y) {
   return(X)
 }
 
+if (F) {
 # Solver test
 a <- c(1, 2, 0, 0)
 b <- c(-2, 3, 1, 0)
@@ -90,6 +91,7 @@ colnames(A) <- NULL
 Y <- c(-4, 5, 7, 13)
 
 X <- Tridiagnoal_System_Solver(A, Y) # Correct: (0, 2, -1, 3)
+}
 
 
 
@@ -112,7 +114,7 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
   dt <- t / N
   dx <- sig * sqrt(3 * dt)
   log_s <- log(s)
-  a = r - q - 0.5 * sig^2
+  a <- r - q - 0.5 * sig^2
   pu <- dt * (sig^2 / (2 * dx^2) + a / (2 * dx))
   pm <- 1- dt * sig^2 / dx^2 - r * dt
   pd <- dt * (sig^2 / (2 * dx^2) - a / (2 * dx))
@@ -136,7 +138,7 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
     }
     
     # Boundary condition
-    v[1, j] <- v[2, j] + exp(dx)
+    v[1, j] <- v[2, j] + dx
     v[(2 * Nj + 1), j] <- v[(2 * Nj), j]
   }
   
@@ -145,4 +147,52 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
 
 
 
-Explicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 10000, Nj = 30000)
+Explicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000)
+
+
+# Implicte FDM method
+Implicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
+  # Initialises constants
+  dt <- t / N
+  dx <- sig * sqrt(3 * dt)
+  log_s <- log(s)
+  a <- r - q - 0.5 * sig^2
+  A <- -0.5 * dt * (sig^2 / dx^2 + a / dx)
+  B <- 1 + dt * sig^2 / dx^2 + r * dt
+  C <- -0.5 * dt * (sig^2 / dx^2 - a / dx)
+  v <- matrix(data = 0, nrow = (2 * Nj + 1), ncol = N)
+  
+  # Initialises prices at the maturity
+  st <- vector(mode = "double", length = 2 * Nj + 1) # Create an empty vector
+  st[length(st)] <- log_s - Nj * dx
+  for (i in (length(st) - 1):1) {
+    st[i] <- st[i + 1] + dx
+  }
+  st <- exp(st)
+  
+  # Initialise option values at maturity
+  v[, N] <- mapply(Payoff_call, strike = k, spot = st)
+  
+  # Compute the bondary condition
+  v[1, N] <- dx + v[2, N]
+  v[(2 * Nj + 1), N] <- v[(2 * Nj), N]
+  
+  # Construct the coefficient matrix
+  c <- diag(x = 1, nrow = (2 * Nj + 1), ncol = (2 * Nj + 1))
+  c <- c * B
+  c[row(c) - col(c) == 1] <- A
+  c[row(c) - col(c) == -1] <- C
+  c[1, 1] <- 1
+  c[1, 2] <- -1
+  c[2 * Nj + 1, 2 * Nj + 1] <- -1
+  c[2 * Nj + 1, 2 * Nj] <- 1
+  
+  # Iterate back though the lattice
+  for (i in (N - 1):1) {
+    v[, i] <- Tridiagnoal_System_Solver(c, v[, i + 1])
+  }
+  
+  return(v[Nj + 1, 1])
+}
+
+ a <- Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 10, Nj = 10)
