@@ -195,4 +195,4 @@ Implicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
   return(v[Nj + 1, 1])
 }
 
-Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 10000, Nj = 10000)
+ a <- Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 10, Nj = 10)
