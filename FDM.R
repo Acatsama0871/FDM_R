@@ -49,6 +49,49 @@ American_preFinal <- function(futureValue, strike, spot, thePayoff) {
   return(max(thePayoff(strike, spot), futureValue))
 }
 
+# Tridiagnoal System Solver
+# Args:
+#  A: The coefficient matrix
+#  Y: The result vector
+# Return:
+#  The solved result
+Tridiagnoal_System_Solver <- function(A, Y) {
+  n.row <- dim(A)[1]
+  n.col <- dim(A)[2]
+  X <- vector(mode = "numeric", length = n.row)
+  
+  # C and D
+  C <- vector(mode = "numeric", length = (n.row - 1)) # n - 1 C
+  D <- vector(mode = "numeric", length = (n.row - 1)) # n - 1 D
+  C[1] <- Y[1] / A[1, 1]
+  D[1] <- - A[1, 2] / A[1, 1]
+  for (i in 2:(n.row - 1)) {
+    C[i] <- (Y[i] - A[i, i - 1] * C[i - 1]) / (A[i, i - 1] * D[i - 1] + A[i, i])
+    D[i] <- (-A[i, i + 1]) / (A[i, i-1] * D[i - 1] + A[i, i])
+  }
+  
+  # result
+  X[n.row] <- (Y[n.row] - A[n.row, (n.row - 1)] * C[n.row - 1]) / 
+                  (A[n.row, (n.row - 1)] * D[n.row - 1] + A[n.row, n.row])
+  for (i in (n.row - 1):2) {
+    X[i] <- C[i] + D[i] * X[i + 1]
+  }
+  
+  return(X)
+}
+
+# Solver test
+a <- c(1, 2, 0, 0)
+b <- c(-2, 3, 1, 0)
+c <- c(0, 1, -2, -1)
+d <- c(0, 0, 1, 4)
+A <- cbind(a, b, c, d)
+colnames(A) <- NULL
+Y <- c(-4, 5, 7, 13)
+
+X <- Tridiagnoal_System_Solver(A, Y) # Correct: (0, 2, -1, 3)
+
+
 
 
 # Finite difference method
