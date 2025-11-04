@@ -26,7 +26,7 @@ Payoff_put <- function(strike, spot) {
 # Define the pre-final valuation function
 # The pre-final valuation function for the European function
 # Args:
-#  strike: the strike price of the opton
+#  strike: the strike price of the option
 #  futureValue: the discounted expectation for the future nodes
 #  spot: the current spot price
 #  thePayoff: the payoff function
@@ -80,17 +80,17 @@ Tridiagnoal_System_Solver <- function(A, Y) {
   return(X)
 }
 
-if (F) {
-# Solver test
-a <- c(1, 2, 0, 0)
-b <- c(-2, 3, 1, 0)
-c <- c(0, 1, -2, -1)
-d <- c(0, 0, 1, 4)
-A <- cbind(a, b, c, d)
-colnames(A) <- NULL
-Y <- c(-4, 5, 7, 13)
+if (FALSE) {
+  # Solver test
+  a <- c(1, 2, 0, 0)
+  b <- c(-2, 3, 1, 0)
+  c <- c(0, 1, -2, -1)
+  d <- c(0, 0, 1, 4)
+  A <- cbind(a, b, c, d)
+  colnames(A) <- NULL
+  Y <- c(-4, 5, 7, 13)
 
-X <- Tridiagnoal_System_Solver(A, Y) # Correct: (0, 2, -1, 3)
+  X <- Tridiagnoal_System_Solver(A, Y) # Correct: (0, 2, -1, 3)
 }
 
 
@@ -119,10 +119,10 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
   pm <- 1- dt * sig^2 / dx^2 - r * dt
   pd <- dt * (sig^2 / (2 * dx^2) - a / (2 * dx))
   
-  # Intialises option value matrix
+  # Initializes option value matrix
   v <- matrix(data = 0, nrow = 2 * Nj + 1, ncol = N)
   
-  # Initialise the prices at the maturity
+  # Initialize the prices at the maturity
   st <- vector(mode = "double", length = 2 * Nj + 1) # Create an empty vector
   st[length(st)] <- log_s - Nj * dx
   for (i in (length(st) - 1):1) {
@@ -130,7 +130,7 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
   }
   st <- exp(st)
   
-  # Initialise option values at maturity
+  # Initialize option values at maturity
   v[, N] <- mapply(Payoff_call, strike = k, spot = st)
   
   # Iterate back through lattice
@@ -138,10 +138,13 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
     for (i in 2:(2 * Nj)) {
       v[i, j] <- pu * v[i - 1, j + 1] + pm * v[i, j + 1] + pd * v[i + 1, j + 1]
     }
-    
-    # Boundary condition
-    v[1, j] <- v[2, j] + dx
-    v[(2 * Nj + 1), j] <- v[(2 * Nj), j]
+
+    # Boundary conditions for call option
+    # Lower boundary: as S -> 0, call value -> 0
+    v[1, j] <- 0
+    # Upper boundary: as S -> infinity, call value -> S - K*exp(-r*tau)
+    tau <- j * dt  # Time to maturity from current step
+    v[(2 * Nj + 1), j] <- st[2 * Nj + 1] - k * exp(-r * tau)
   }
   
   return(v[Nj + 1, 1])
@@ -152,20 +155,21 @@ Explicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
 Explicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000)
 
 
-# Implicte FDM method
-Implicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj, dx) {
-  # Initialises constants
+# Implicit FDM method
+Implicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
+  # Initializes constants
   dt <- t / N
+  dx <- sig * sqrt(3 * dt)
   log_s <- log(s)
   a <- r - q - 0.5 * sig^2
   A <- -0.5 * dt * (sig^2 / dx^2 + a / dx)
   B <- 1 + dt * sig^2 / dx^2 + r * dt
   C <- -0.5 * dt * (sig^2 / dx^2 - a / dx)
   
-  # Intialises option value matrix
+  # Initializes option value matrix
   v <- matrix(data = 0, nrow = (2 * Nj + 1), ncol = N)
   
-  # Initialises prices at the maturity
+  # Initializes prices at the maturity
   st <- vector(mode = "double", length = 2 * Nj + 1) # Create an empty vector
   st[length(st)] <- log_s - Nj * dx
   for (i in (length(st) - 1):1) {
@@ -173,50 +177,56 @@ Implicit_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj, dx) {
   }
   st <- exp(st)
   
-  # Initialise option values at maturity
+  # Initialize option values at maturity
   v[, N] <- mapply(Payoff_call, strike = k, spot = st)
-  
-  # Compute the condary condition
-  v[1, N] <- dx + v[2, N]
-  v[(2 * Nj + 1), N] <- v[(2 * Nj), N]
-  
+
   # Construct the coefficient matrix
   c <- diag(x = 1, nrow = (2 * Nj + 1), ncol = (2 * Nj + 1))
   c <- c * B
   c[row(c) - col(c) == 1] <- A
   c[row(c) - col(c) == -1] <- C
+  # Boundary conditions: Set first and last rows to enforce boundary values
+  c[1, ] <- 0
   c[1, 1] <- 1
-  c[1, 2] <- -1
-  c[2 * Nj + 1, 2 * Nj + 1] <- -1
-  c[2 * Nj + 1, 2 * Nj] <- 1
-  
+  c[2 * Nj + 1, ] <- 0
+  c[2 * Nj + 1, 2 * Nj + 1] <- 1
+
   # Iterate back though the lattice
   for (i in (N - 1):1) {
-    
-    # Solve the sysyem
-    v[, i] <- Tridiagnoal_System_Solver(c, v[, i + 1])
+    tau <- i * dt  # Time to maturity from current step
+    y <- v[, i + 1]
+
+    # Apply boundary conditions to result vector
+    # Lower boundary: as S -> 0, call value -> 0
+    y[1] <- 0
+    # Upper boundary: as S -> infinity, call value -> S - K*exp(-r*tau)
+    y[2 * Nj + 1] <- st[2 * Nj + 1] - k * exp(-r * tau)
+
+    # Solve the system
+    v[, i] <- Tridiagnoal_System_Solver(c, y)
   }
   
   return(v[Nj + 1, 1])
 }
 
-Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000, dx = 0.3 * sqrt(3 * 0.25 / 1000))
+Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000)
  
  
  # Crank-Nicolson method
- CrankNicolson_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj, dx) {
-   # Intitilises constant
+ CrankNicolson_FDM.Eur.call <- function(k, t, s, r, sig, q, N, Nj) {
+   # Initializes constant
    dt <- t / N
+   dx <- sig * sqrt(3 * dt)
    log_s <- log(s)
    a <- r - q - 0.5 * sig^2
    pu <- -0.25 * dt * ((sig^2) / (dx^2) + (a) / dx)
    pm <- 1 + dt * sig^2 / (2 * dx^2) + r * dt * 0.5
    pd <- -0.25 * dt * ((sig^2) / (dx^2) - (a) / dx)
    
-   # Intialises option value matrix
+   # Initializes option value matrix
    v <- matrix(data = 0, nrow = (2 * Nj + 1), ncol = N)
    
-   # Initialises prices at the maturity
+   # Initializes prices at the maturity
    st <- vector(mode = "double", length = 2 * Nj + 1) # Create an empty vector
    st[length(st)] <- log_s - Nj * dx
    for (i in (length(st) - 1):1) {
@@ -224,40 +234,48 @@ Implicit_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 
    }
    st <- exp(st)
    
-   # Initialise option values at maturity
+   # Initialize option values at maturity
    v[, N] <- mapply(Payoff_call, strike = k, spot = st)
-   
-   # Compute the bondary condition
-   v[1, N] <- dx + v[2, N]
-   v[(2 * Nj + 1), N] <- v[(2 * Nj), N]
-   
+
    # Construct the coefficient matrix
    c <- diag(x = 1, nrow = (2 * Nj + 1), ncol = (2 * Nj + 1))
    c <- c * pm
    c[row(c) - col(c) == 1] <- pu
    c[row(c) - col(c) == -1] <- pd
+   # Boundary conditions: Set first and last rows to enforce boundary values
+   c[1, ] <- 0
    c[1, 1] <- 1
-   c[1, 2] <- -1
-   c[2 * Nj + 1, 2 * Nj + 1] <- -1
-   c[2 * Nj + 1, 2 * Nj] <- 1
-   
+   c[2 * Nj + 1, ] <- 0
+   c[2 * Nj + 1, 2 * Nj + 1] <- 1
+
    # Construct the result-calculation matrix
    d <- diag(x = 1, nrow = (2 * Nj + 1), ncol = (2 * Nj + 1))
    d[row(d) - col(d) == 1] <- -pu
    d[row(d) - col(d) == 0] <- -(pm - 2)
    d[row(d) - col(d) == -1] <- -pd
-   d[1, ] <- c(1, rep(0, 2 * Nj))
-   d[2 * Nj + 1, ] <- c(rep(0, 2 * Nj), 1)
-   
+   # Boundary conditions for the explicit part
+   d[1, ] <- 0
+   d[1, 1] <- 1
+   d[2 * Nj + 1, ] <- 0
+   d[2 * Nj + 1, 2 * Nj + 1] <- 1
+
    # Iterate back though the lattice
    for (i in (N - 1):1) {
+     tau <- i * dt  # Time to maturity from current step
      temp <- d %*% v[, i + 1]
+
+     # Apply boundary conditions to result vector
+     # Lower boundary: as S -> 0, call value -> 0
+     temp[1] <- 0
+     # Upper boundary: as S -> infinity, call value -> S - K*exp(-r*tau)
+     temp[2 * Nj + 1] <- st[2 * Nj + 1] - k * exp(-r * tau)
+
      v[, i] <- Tridiagnoal_System_Solver(c, temp)
    }
    
    return(v[Nj + 1, 1])
  }
  
- CrankNicolson_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000, dx = 0.3 * sqrt(3 * 0.25 / 1000))
+ CrankNicolson_FDM.Eur.call(k = 65, t = 0.25, s = 60, r = 0.08, sig = 0.3, q = 0, N = 1000, Nj = 1000)
  
 
